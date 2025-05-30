@@ -24,7 +24,7 @@ if (!file_exists($adminFile)) {
     file_put_contents($adminFile, ''); 
 } 
 if (!file_exists($versionFile)) { 
-    file_put_contents($versionFile, '4.69'); // 默认版本号
+    file_put_contents($versionFile, '4.71'); // 默认版本号
 }
 // 检查并测试sdcs.txt文件
 $sdcsFile = 'sdcs.txt';
