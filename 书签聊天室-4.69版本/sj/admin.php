@@ -5,9 +5,9 @@ $chatFile = 'wz.txt';
 $checkFile = 'jc.txt';
 $banFile = 'bn.txt'; // 封禁账号记录文件
 $adminFile = 'admin.txt'; // 管理员账号文件
-$versionFile = 'version.txt'; 
+$versionFile = 'version.txt'; // 版本文件
 
-// 检查文件是否存在
+// 检查文件是否存在，若不存在则创建 
 if (!file_exists($userFile)) { 
     file_put_contents($userFile, ''); 
 } 
@@ -24,7 +24,7 @@ if (!file_exists($adminFile)) {
     file_put_contents($adminFile, ''); 
 } 
 if (!file_exists($versionFile)) { 
-    file_put_contents($versionFile, '4.69'); 
+    file_put_contents($versionFile, '4.69'); // 默认版本号
 }
 // 检查并测试sdcs.txt文件
 $sdcsFile = 'sdcs.txt';
@@ -54,48 +54,55 @@ if (!file_exists($sdcsFile)) {
     $readSpeed = strlen($readContent) / $readTime;
     
     // 保存速度信息
-    $speedInfo = "文件夹写入速度:" . round($writeSpeed) . "字节/s\n文件夹读取速度:" . round($readSpeed) . "字节/s\n";
+    $speedInfo = "" . round($writeSpeed/1048576, 2) . "MB/s\n" . round($readSpeed/1048576, 2) . "MB/s\n";
     file_put_contents('speed_info.txt', $speedInfo);
 } else {
     // 如果文件已存在，读取速度信息
     if (file_exists('speed_info.txt')) {
         $speedInfo = file_get_contents('speed_info.txt');
     } else {
-        $speedInfo = "文件夹写入速度:未知\n文件夹读取速度:未知\n";
+        $speedInfo = "未知MB/s\n未知MB/s\n";
     }
 } 
 
+// 获取当前版本号
 function getCurrentVersion() {
     global $versionFile;
     return trim(file_get_contents($versionFile));
 }
 
+// 检测最新版本
 function checkLatestVersion() {
     $url = 'http://945202.xyz/sp/ltsgx.html';
     $currentVersion = getCurrentVersion();
     
+    // 初始化cURL会话
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 跳过SSL验证
     
+    // 执行cURL请求
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
     
+    // 检查请求是否成功
     if ($httpCode === 200 && $response) {
+        // 使用正则表达式匹配版本号
         preg_match('/<p>当前书签聊天室最新版本([\d.]+)<\/p>/', $response, $matches);
         
         if (isset($matches[1])) {
             $latestVersion = $matches[1];
             
+            // 比较版本号
             if (version_compare($currentVersion, $latestVersion, '<')) {
                 return [
                     'updateAvailable' => true,
                     'currentVersion' => $currentVersion,
                     'latestVersion' => $latestVersion,
-                    'updateUrl' => 'http://945202.xyz/sp/ltsgw.html'
+                    'updateUrl' => $url
                 ];
             }
         }
@@ -1139,7 +1146,7 @@ body {
                 </div>
             </div>
         <?php else: ?>
-            <!-- 提示 -->
+            <!-- 版本更新提示 -->
             <?php if ($updateInfo['updateAvailable']): ?>
                 <div class="update-notification" id="update-notification">
                     <p>
@@ -1157,6 +1164,7 @@ body {
                 </div>
             <?php endif; ?>
             
+            <!-- 选项卡导航 -->
             <div class="tabs">
                 <div class="tab active" data-tab="dashboard">
                     <i class="fas fa-tachometer-alt"></i> 系统概览
@@ -1168,7 +1176,8 @@ body {
                     <i class="fas fa-comments"></i> 聊天记录
                 </div>
             </div>
-
+            
+            <!-- 系统概览 -->
             <div class="tab-content active" id="dashboard">
                 <div class="card">
                     <div class="card-header">
@@ -1230,8 +1239,8 @@ body {
                                              <p><strong>文件夹可读:</strong> <?php echo is_readable(dirname(__FILE__)) ? '是' : '否'; ?></p> 
                                              <p><strong>文件夹可写:</strong> <?php echo is_writable(dirname(__FILE__)) ? '是' : '否'; ?></p> 
                                              <p><strong>文件IO测试:</strong> <?php echo file_exists('sdcs.txt') ? '已完成' : '未完成'; ?></p> 
-                                             <p><strong>文件夹写入速度:</strong> <?php echo isset($speedInfo) ? explode("\n", $speedInfo)[0] : '未测试'; ?></p> 
-                                             <p><strong>文件夹读取速度:</strong> <?php echo isset($speedInfo) ? explode("\n", $speedInfo)[1] : '未测试'; ?></p> 
+                                             <p><strong>IO写入速度(MB/s):</strong> <?php echo isset($speedInfo) ? explode("\n", $speedInfo)[0] : '未测试'; ?></p>
+                                             <p><strong>IO读取速度(MB/s):</strong> <?php echo isset($speedInfo) ? explode("\n", $speedInfo)[1] : '未测试'; ?></p> 
                                          </div> 
                                  </div>
                             </div>
@@ -1454,54 +1463,7 @@ body {
             }, 30000); // 每30秒刷新一次
         });
         
-        // WebSocket连接
-        function connectWebSocket() {
-            if ('WebSocket' in window) {
-                try {
-                    // 尝试连接WebSocket服务器
-                    const ws = new WebSocket(`ws://${window.location.hostname}:8080/admin`);
-                    
-                    ws.onopen = function() {
-                        console.log('WebSocket连接已建立');
-                        showNotification('已连接到实时更新服务', 'success');
-                    };
-                    
-                    ws.onmessage = function(event) {
-                        const data = JSON.parse(event.data);
-                        console.log('收到WebSocket消息:', data);
-                        
-                        // 根据消息类型更新相应的界面
-                        if (data.type === 'chat_message') {
-                            addNewChatMessage(data.message);
-                        } else if (data.type === 'user_update') {
-                            refreshUsers();
-                        } else if (data.type === 'stats_update') {
-                            updateStats(data.stats);
-                        }
-                    };
-                    
-                    ws.onclose = function() {
-                        console.log('WebSocket连接已关闭');
-                        showNotification('实时更新服务已断开，将尝试重新连接', 'warning');
-                        
-                        // 5秒后尝试重新连接
-                        setTimeout(connectWebSocket, 5000);
-                    };
-                    
-                    ws.onerror = function(error) {
-                        console.error('WebSocket错误:', error);
-                    };
-                    
-                } catch (error) {
-                    console.error('WebSocket连接失败:', error);
-                    showNotification('实时更新服务连接失败', 'error');
-                }
-            } else {
-                console.error('浏览器不支持WebSocket');
-                showNotification('您的浏览器不支持实时更新功能', 'error');
-            }
-        }
-        
+
         // 用户管理功能
         function searchUsers() {
             const searchTerm = document.getElementById('user-search').value.toLowerCase();
@@ -1819,7 +1781,6 @@ function getRemoteNotice() {
             $noticeContent .= '<div class="notice-item">' . htmlspecialchars($content) . '</div>';
         }
         
-        // 将公告内容写入文件
         file_put_contents(__DIR__.'/公告栏与说明.txt', $noticeContent);
         
         return $noticeContent;
